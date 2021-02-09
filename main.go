@@ -43,6 +43,9 @@ func main() {
 
 	var req ifReq
 	req.Flags = IFFNOPI | IFFTUN
+	if *flagRoutines > 1 {
+		req.Flags |= IFFMULTIQUEUE
+	}
 	copy(req.Name[:], *flagName)
 
 	err = ioctl(uintptr(fdInt), unix.TUNSETIFF, uintptr(unsafe.Pointer(&req)))
@@ -63,7 +66,24 @@ func main() {
 	}
 
 	for i := 0; i < *flagRoutines-1; i++ {
-		go handle(f)
+		// MULTIQUEUE
+		var fdInt2 int
+
+		if fdInt2, err = unix.Open(
+			"/dev/net/tun", os.O_RDWR, 0); err != nil {
+			panic(err)
+		}
+
+		req.Flags = IFFNOPI | IFFTUN | IFFMULTIQUEUE
+		copy(req.Name[:], *flagName)
+
+		err = ioctl(uintptr(fdInt2), unix.TUNSETIFF, uintptr(unsafe.Pointer(&req)))
+		if err != nil {
+			panic(err)
+		}
+		f2 := os.NewFile(uintptr(fdInt2), "tun")
+
+		go handle(f2)
 	}
 	handle(f)
 }
